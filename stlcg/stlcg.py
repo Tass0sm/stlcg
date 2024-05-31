@@ -37,29 +37,21 @@ def tensor_to_str(tensor):
         tensor = tensor.cpu()
     return str(tensor.numpy())
 
+def convert_to_input_value(x):
+    if isinstance(x, Expression):
+        assert x.value is not None, "Input Expression does not have numerical values"
+        x_ret = x.value
+    elif isinstance(x, torch.Tensor):
+        x_ret = x
+    elif isinstance(x, tuple):
+        x_ret = convert_to_input_values(x)
+    else:
+        raise ValueError(f"Argument {x} is an invalid input trace")
+
+    return x_ret
+
 def convert_to_input_values(inputs):
-    x_, y_ = inputs
-    if isinstance(x_, Expression):
-        assert x_.value is not None, "Input Expression does not have numerical values"
-        x_ret = x_.value
-    elif isinstance(x_, torch.Tensor):
-        x_ret = x_
-    elif isinstance(x_, tuple):
-        x_ret = convert_to_input_values(x_)
-    else:
-        raise ValueError("First argument is an invalid input trace")
-
-    if isinstance(y_, Expression):
-        assert y_.value is not None, "Input Expression does not have numerical values"
-        y_ret = y_.value
-    elif isinstance(y_, torch.Tensor):
-        y_ret = y_
-    elif isinstance(y_, tuple):
-        y_ret = convert_to_input_values(y_)
-    else:
-        raise ValueError("Second argument is an invalid input trace")
-
-    return (x_ret, y_ret)
+    return tuple([convert_to_input_value(x) for x in inputs])
 
 
 class Maxish(torch.nn.Module):
@@ -702,7 +694,10 @@ class Or(STL_Formula):
             return torch.cat([Or.separate_or(formula.subformula1, input_[0], pscale=pscale, scale=scale, keepdim=keepdim, agm=agm, distributed=distributed, **kwargs), Or.separate_or(formula.subformula2, input_[1], pscale=pscale, scale=scale, keepdim=keepdim, agm=agm, distributed=distributed, **kwargs)], axis=-1)
 
     def robustness_trace(self, inputs, pscale=1, scale=-1, keepdim=True, agm=False, distributed=False, **kwargs):
-        xx = torch.cat([Or.separate_or(self.subformula1, inputs[0], pscale=pscale, scale=scale, keepdim=keepdim, agm=agm, distributed=distributed, **kwargs), Or.separate_or(self.subformula2, inputs[1], pscale=pscale, scale=scale, keepdim=keepdim, agm=agm, distributed=distributed, **kwargs)], axis=-1)
+        xx = torch.cat([
+            Or.separate_or(self.subformula1, inputs[0], pscale=pscale, scale=scale, keepdim=keepdim, agm=agm, distributed=distributed, **kwargs),
+            Or.separate_or(self.subformula2, inputs[1], pscale=pscale, scale=scale, keepdim=keepdim, agm=agm, distributed=distributed, **kwargs)
+        ], axis=-1)
         return self.operation(xx, scale, dim=-1, keepdim=False, agm=agm, distributed=distributed)                                         # [batch_size, time_dim, ...]
 
     def _next_function(self):
